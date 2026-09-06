@@ -4,10 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Yük Hacmi Yerleşim Hesaplayıcı</title>
-<meta name="theme-color" content="#0c0f13">
-<!-- GitHub deposunda bu HTML dosyasıyla aynı klasörde bulunan favicon.png kullanılır. -->
-<link rel="icon" type="image/png" href="./favicon.png">
-<link rel="apple-touch-icon" href="./favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -25,6 +21,23 @@
     --amber: #f2a63d;
     --danger: #e2634f;
     --radius: 3px;
+    --viewport-bg: #080a0d;
+    --hint-bg: rgba(12,15,19,0.7);
+  }
+  html[data-theme="light"]{
+    --bg: #ffffff;
+    --panel: #f4f5f7;
+    --panel-2: #eceef1;
+    --line: #dde1e6;
+    --grid: #eef0f3;
+    --text: #14181d;
+    --text-dim: #6b7480;
+    --cyan: #0f9c8c;
+    --cyan-dim: #8fd6cb;
+    --amber: #b5741a;
+    --danger: #c23f2c;
+    --viewport-bg: #ffffff;
+    --hint-bg: rgba(255,255,255,0.85);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;height:100%;overflow:hidden;}
@@ -35,6 +48,7 @@
       var(--bg);
     color:var(--text);
     font-family:'Inter',sans-serif;
+    transition:background-color .2s, color .2s;
   }
   .page{
     height:100vh;
@@ -46,6 +60,15 @@
     padding: clamp(10px,2vh,22px) clamp(14px,2.4vw,28px) clamp(8px,1.4vh,16px);
     border-bottom:1px solid var(--line);
   }
+  .theme-toggle{
+    margin-left:auto;align-self:center;display:flex;align-items:center;gap:7px;
+    cursor:pointer;padding:6px 13px;border:1px solid var(--line);border-radius:20px;
+    background:var(--panel);font-family:'JetBrains Mono',monospace;font-size:11px;
+    letter-spacing:0.5px;color:var(--text-dim);user-select:none;transition:border-color .15s;
+  }
+  .theme-toggle:hover{border-color:var(--cyan-dim);}
+  .theme-toggle .theme-icon{font-size:14px;line-height:1;}
+  .theme-toggle .theme-label{text-transform:uppercase;color:var(--text);}
   .topbar .mark{
     font-family:'Oswald',sans-serif;font-weight:700;font-size:clamp(16px,1.6vh + 8px,20px);letter-spacing:0.5px;
     color:var(--text);
@@ -86,6 +109,19 @@
     border-radius:var(--radius);width:100%;
   }
   .field input:focus{outline:none;border-color:var(--cyan-dim);}
+  .field select{
+    background:var(--panel);border:1px solid var(--line);color:var(--text);
+    font-family:'JetBrains Mono',monospace;font-size:13px;padding:clamp(5px,1vh,8px) 8px;
+    border-radius:var(--radius);width:100%;
+  }
+  .field select:focus{outline:none;border-color:var(--cyan-dim);}
+  .field select:disabled{opacity:.5;cursor:not-allowed;}
+  .field .readout{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text-dim);
+    font-family:'JetBrains Mono',monospace;font-size:14px;padding:clamp(5px,1vh,8px) 8px;
+    border-radius:var(--radius);width:100%;
+  }
+  .select-row{margin-bottom:clamp(8px,1.6vh,14px);}
   .divider{height:1px;background:var(--line);margin:clamp(12px,2.4vh,22px) 0;}
   .rotate-opt{
     display:flex;gap:10px;align-items:flex-start;padding:clamp(6px,1.2vh,10px) 10px;
@@ -106,8 +142,9 @@
   .run-btn:hover{filter:brightness(1.08);}
   .run-btn:active{filter:brightness(0.95);}
   .viewport-wrap{
-    position:relative;background:#080a0d;overflow:hidden;
+    position:relative;background:var(--viewport-bg);overflow:hidden;
     min-height:0;display:flex;flex-direction:column;
+    transition:background-color .2s;
   }
   .viewport-header{
     display:flex;justify-content:space-between;align-items:center;flex:none;
@@ -127,7 +164,7 @@
   .hint{
     position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
     font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);
-    background:rgba(12,15,19,0.7);padding:4px 10px;border-radius:20px;border:1px solid var(--line);
+    background:var(--hint-bg);padding:4px 10px;border-radius:20px;border:1px solid var(--line);
     pointer-events:none;
   }
   .legend{
@@ -153,16 +190,38 @@
 <div class="topbar">
   <div class="mark">MOBIQU</div>
   <div class="sub">3D Packing Optimizer — Mobiqu packing</div>
+  <div class="theme-toggle" id="themeToggle" role="button" tabindex="0" title="Görünümü değiştir">
+    <span class="theme-icon" id="themeIcon">🌙</span>
+    <span class="theme-label" id="themeLabel">Dark</span>
+  </div>
 </div>
 
 <div class="layout">
   <div class="panel">
     <div class="section-label">Dış Yük Hacmi</div>
-    <div class="field-row">
-      <div class="field"><label>Uzunluk (L)</label><input type="number" id="L" value="400" min="0.01" step="any"></div>
-      <div class="field"><label>Genişlik (W)</label><input type="number" id="W" value="300" min="0.01" step="any"></div>
-      <div class="field"><label>Yükseklik (H)</label><input type="number" id="H" value="250" min="0.01" step="any"></div>
+    <div class="select-row field">
+      <label>Sıcaklık Aralığı</label>
+      <select id="tempRange">
+        <option value="">Seçiniz</option>
+        <option value="+2/+8">+2 / +8 °C</option>
+        <option value="-25/-15">-25 / -15 °C</option>
+        <option value="+15/+25">+15 / +25 °C</option>
+      </select>
     </div>
+    <div class="select-row field">
+      <label>Ürün</label>
+      <select id="productSelect" disabled>
+        <option value="">Önce sıcaklık aralığı seçin</option>
+      </select>
+    </div>
+    <div class="field-row" id="dimReadout" style="display:none;">
+      <div class="field"><label>Uzunluk (L)</label><div class="readout" id="ro-L">—</div></div>
+      <div class="field"><label>Genişlik (W)</label><div class="readout" id="ro-W">—</div></div>
+      <div class="field"><label>Yükseklik (H)</label><div class="readout" id="ro-H">—</div></div>
+    </div>
+    <input type="hidden" id="L" value="">
+    <input type="hidden" id="W" value="">
+    <input type="hidden" id="H" value="">
 
     <div class="section-label">İç Kutu Ölçüleri</div>
     <div class="field-row">
@@ -170,7 +229,7 @@
       <div class="field"><label>Genişlik (w)</label><input type="number" id="bw" value="45" min="0.01" step="any"></div>
       <div class="field"><label>Yükseklik (h)</label><input type="number" id="bh" value="110" min="0.01" step="any"></div>
     </div>
-    <div style="font-size:10px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin:-6px 0 4px;">Birim serbest — tüm ölçülerde aynı birimi kullanın (mm, cm, inç...)</div>
+    <div style="font-size:10px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin:-6px 0 4px;">Birim: mm — iç kutu ölçülerini milimetre cinsinden girin</div>
 
     <div class="divider"></div>
 
@@ -216,6 +275,118 @@
 <script>
 const EPS = 1e-6;
 const PALETTE = ['#4fd8c9','#f2a63d','#e2634f','#8b7ce8','#5fb0e8','#e6d24f','#7ce88b','#e87cc9'];
+
+// ---------- theme toggle (view-only, never touches the calculation state) ----------
+(function(){
+  const btn = document.getElementById('themeToggle');
+  const icon = document.getElementById('themeIcon');
+  const label = document.getElementById('themeLabel');
+  function apply(theme){
+    if(theme==='light'){
+      document.documentElement.setAttribute('data-theme','light');
+      icon.textContent = '☀️';
+      label.textContent = 'Light';
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      icon.textContent = '🌙';
+      label.textContent = 'Dark';
+    }
+  }
+  btn.addEventListener('click', ()=>{
+    const isLight = document.documentElement.getAttribute('data-theme')==='light';
+    apply(isLight ? 'dark' : 'light');
+  });
+  btn.addEventListener('keydown', e=>{
+    if(e.key==='Enter' || e.key===' '){ e.preventDefault(); btn.click(); }
+  });
+})();
+
+// ---------- outer box product catalog (mm) ----------
+// Dimensions unaffected by the selected temperature range
+const PRODUCTS_FIXED = [
+  {name:'Multi-4',    l:160, w:160, h:160},
+  {name:'Multi-12',   l:270, w:270, h:170},
+  {name:'Multi-28',   l:305, w:305, h:305},
+  {name:'Multi4E',    l:145, w:145, h:145},
+  {name:'Multi-12E',  l:220, w:220, h:220},
+  {name:'Multi-28E',  l:300, w:300, h:285},
+  {name:'Multi-42E',  l:460, w:305, h:290},
+  {name:'Single-4',   l:152, w:152, h:152},
+  {name:'Single-12',  l:263, w:263, h:162},
+  {name:'Single-24',  l:287, w:287, h:287},
+  {name:'Single-4P',  l:155, w:155, h:145},
+  {name:'Single-12P', l:225, w:225, h:215},
+  {name:'Single-4V',  l:145, w:145, h:145},
+  {name:'Single-12V', l:220, w:220, h:218},
+  {name:'Single-28V', l:295, w:295, h:285},
+  {name:'Single-42V', l:460, w:305, h:290},
+];
+// Dimensions that change depending on the selected temperature range
+const PRODUCTS_TEMP = {
+  '+2/+8': [
+    {name:'Single-28P', l:300, w:300, h:300},
+    {name:'Single-56P', l:375, w:375, h:375},
+    {name:'Single-72P', l:500, w:375, h:375},
+  ],
+  '-25/-15': [
+    {name:'Single-28P', l:300, w:300, h:300},
+    {name:'Single-56P', l:375, w:375, h:375},
+    {name:'Single-72P', l:500, w:375, h:375},
+  ],
+  '+15/+25': [
+    {name:'Single-28P', l:320, w:320, h:320},
+    {name:'Single-56P', l:395, w:375, h:395},
+    {name:'Single-72P', l:520, w:395, h:395},
+  ],
+};
+
+(function(){
+  const tempSelect = document.getElementById('tempRange');
+  const productSelect = document.getElementById('productSelect');
+  const dimReadout = document.getElementById('dimReadout');
+  const roL = document.getElementById('ro-L');
+  const roW = document.getElementById('ro-W');
+  const roH = document.getElementById('ro-H');
+  const hiddenL = document.getElementById('L');
+  const hiddenW = document.getElementById('W');
+  const hiddenH = document.getElementById('H');
+
+  function clearSelection(){
+    dimReadout.style.display = 'none';
+    hiddenL.value = ''; hiddenW.value = ''; hiddenH.value = '';
+  }
+
+  function populateProducts(){
+    const temp = tempSelect.value;
+    clearSelection();
+    if(!temp){
+      productSelect.disabled = true;
+      productSelect.innerHTML = '<option value="">Önce sıcaklık aralığı seçin</option>';
+      return;
+    }
+    productSelect.disabled = false;
+    const opts = ['<option value="">Ürün seçin</option>'];
+    PRODUCTS_FIXED.forEach((p,i)=> opts.push(`<option value="fixed:${i}">${p.name}</option>`));
+    PRODUCTS_TEMP[temp].forEach((p,i)=> opts.push(`<option value="temp:${i}">${p.name}</option>`));
+    productSelect.innerHTML = opts.join('');
+  }
+
+  function selectProduct(){
+    const val = productSelect.value;
+    if(!val){ clearSelection(); return; }
+    const [kind, idxStr] = val.split(':');
+    const idx = parseInt(idxStr, 10);
+    const p = kind==='fixed' ? PRODUCTS_FIXED[idx] : PRODUCTS_TEMP[tempSelect.value][idx];
+    hiddenL.value = p.l; hiddenW.value = p.w; hiddenH.value = p.h;
+    roL.textContent = p.l + ' mm';
+    roW.textContent = p.w + ' mm';
+    roH.textContent = p.h + ' mm';
+    dimReadout.style.display = 'grid';
+  }
+
+  tempSelect.addEventListener('change', populateProducts);
+  productSelect.addEventListener('change', selectProduct);
+})();
 
 // ---------- orientation generation ----------
 function dedupeOrientations(list){
@@ -504,7 +675,7 @@ function run(){
   warnBox.style.display='none';
 
   if(![L,W,H,l,w,h].every(v=>isFinite(v) && v>0)){
-    warnBox.textContent = 'Tüm ölçü alanlarını pozitif sayılarla doldurun.';
+    warnBox.textContent = 'Sıcaklık aralığı ve ürün seçin, ardından iç kutu ölçülerini pozitif sayılarla doldurun.';
     warnBox.style.display='block';
     return;
   }
@@ -559,7 +730,7 @@ function run(){
 }
 
 document.getElementById('runBtn').addEventListener('click', run);
-window.addEventListener('load', ()=>{ initThree(); run(); });
+window.addEventListener('load', ()=>{ initThree(); });
 </script>
 </body>
 </html>
