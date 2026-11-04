@@ -1,0 +1,6 @@
+{
+  "name": "Mobiqu 3D Packing Optimizer",
+  "description": "3D cargo volume and packaging layout optimizer for Mobiqu temperature-controlled containers.",
+  "request_feedback": false,
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
