@@ -63,7 +63,7 @@ export const Topbar: React.FC<TopbarProps> = ({
           title="Mobiqu - www.mobiqu.com"
         >
           <img
-            src={isLight ? '/assets/mobiqu-logo-black.svg' : '/assets/mobiqu-logo-white.svg'}
+            src={isLight ? './assets/mobiqu-logo-black.svg' : './assets/mobiqu-logo-white.svg'}
             alt="Mobiqu"
             className="h-6 sm:h-7 md:h-8 w-auto object-contain"
           />

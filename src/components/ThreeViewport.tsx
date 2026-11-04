@@ -787,7 +787,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 text-center overflow-hidden">
             {/* The Background Mobiqu Fleet Image */}
             <img
-              src="/assets/aistudio/image_da845260.png"
+              src="./assets/aistudio/image_da845260.png"
               alt="Mobiqu Thermal Packaging Fleet"
               className="absolute inset-0 w-full h-full object-cover object-center filter dark:brightness-[0.78] transition-all duration-700 select-none pointer-events-none"
             />
