@@ -2,9 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import {
   RotateCcw,
-  Eye,
   Box,
-  Compass,
   CheckCircle2,
   Play,
   Pause,
@@ -15,12 +13,28 @@ import {
   Loader2,
   Check,
   Zap,
+  Grid,
+  Sparkles,
+  Sun,
+  Lightbulb,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Palette,
+  Shuffle,
 } from 'lucide-react';
-import { PackResult, OrientationSummary, LayerInfo } from '../types';
+import { PackResult, OrientationSummary, LayerInfo, Language, EnvironmentMode, PaletteMode } from '../types';
 import { formatNumber, toLiters } from '../solver/packer';
 import { startCanvasRecording, downloadBlob } from '../utils/videoRecorder';
+import { useTranslation } from '../i18n/translations';
+import { Orientation3DCard } from './Orientation3DCard';
 
 interface ThreeViewportProps {
+  theme?: 'dark' | 'light';
+  language: Language;
+  paletteMode: PaletteMode;
+  onPaletteModeChange: (mode: PaletteMode) => void;
+  onShuffleColors: () => void;
   packResult: PackResult | null;
   summaries: OrientationSummary[];
   outerL: number | null;
@@ -37,6 +51,11 @@ interface ThreeViewportProps {
 }
 
 export const ThreeViewport: React.FC<ThreeViewportProps> = ({
+  theme,
+  language,
+  paletteMode,
+  onPaletteModeChange,
+  onShuffleColors,
   packResult,
   summaries,
   outerL,
@@ -51,12 +70,15 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
   setRecordingProgress,
   onRegisterRecordTrigger,
 }) => {
+  const t = useTranslation(language);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const groupRef = useRef<THREE.Group | null>(null);
+  const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
+  const keyLightRef = useRef<THREE.DirectionalLight | null>(null);
 
   // Camera orbit state
   const azimuthRef = useRef<number>(0.75);
@@ -67,20 +89,26 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
   const lastMousePosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const touchLastRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Viewport display controls
-  const [wireframeMode, setWireframeMode] = useState<boolean>(false);
+  // Viewport & Lighting Settings (Defaults: Grid enabled, Object Shadows off, Specular Reflections off)
+  const [environmentMode, setEnvironmentMode] = useState<EnvironmentMode>('grid'); // 'grid' | 'photobooth'
+  const [objectShadows, setObjectShadows] = useState<boolean>(false);
+  const [specularReflection, setSpecularReflection] = useState<boolean>(false);
+  const [showEnvDropdown, setShowEnvDropdown] = useState<boolean>(false);
+
+  // Bottom Orientations 3D Drawer State (default: collapsed)
+  const [isOrientationsExpanded, setIsOrientationsExpanded] = useState<boolean>(false);
+  const isDark = theme ? theme === 'dark' : (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
 
   // Animation Playback State
   const [visibleCount, setVisibleCount] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [playSpeed, setPlaySpeed] = useState<number>(1); // 0.5, 1, 2, 4
+  const [playSpeed, setPlaySpeed] = useState<number>(1);
   const [layerNotice, setLayerNotice] = useState<string | null>(null);
   const [isLayerTransitioning, setIsLayerTransitioning] = useState<boolean>(false);
 
   const totalBoxes = packResult ? packResult.sortedPlacements.length : 0;
   const layers = packResult ? packResult.layers : [];
 
-  // Determine which layer is currently active based on visibleCount
   const currentActiveLayer: LayerInfo | undefined = layers.find(
     (l) => visibleCount > l.startIndex && visibleCount <= l.endIndex + 1
   ) || layers[layers.length - 1];
@@ -150,6 +178,16 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
     }
   }, [packResult]);
 
+  // Update shadow mapping dynamically
+  useEffect(() => {
+    if (keyLightRef.current) {
+      keyLightRef.current.castShadow = objectShadows;
+    }
+    if (rendererRef.current) {
+      rendererRef.current.shadowMap.enabled = objectShadows;
+    }
+  }, [objectShadows]);
+
   // Initialize Three.js scene
   useEffect(() => {
     const container = containerRef.current;
@@ -168,24 +206,38 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
       antialias: true,
       alpha: true,
       powerPreference: 'high-performance',
-      preserveDrawingBuffer: true, // Necessary for canvas.captureStream and video export
+      preserveDrawingBuffer: true,
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(width, height);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     rendererRef.current = renderer;
     canvasRef.current = renderer.domElement;
 
     container.appendChild(renderer.domElement);
 
-    // Modern studio lighting
+    // Studio lighting
     const amb = new THREE.AmbientLight(0xffffff, 0.75);
+    ambientLightRef.current = amb;
     scene.add(amb);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
-    keyLight.position.set(8, 14, 10);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.95);
+    keyLight.position.set(9, 16, 11);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.camera.near = 0.5;
+    keyLight.shadow.camera.far = 50;
+    keyLight.shadow.camera.left = -10;
+    keyLight.shadow.camera.right = 10;
+    keyLight.shadow.camera.top = 10;
+    keyLight.shadow.camera.bottom = -10;
+    keyLight.shadow.bias = -0.0004;
+    keyLightRef.current = keyLight;
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xe0f2fe, 0.4);
+    const fillLight = new THREE.DirectionalLight(0xe0f2fe, 0.35);
     fillLight.position.set(-10, 6, -8);
     scene.add(fillLight);
 
@@ -293,31 +345,29 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
 
     if (visibleCount >= totalBoxes) {
       setIsPlaying(false);
-      setLayerNotice(`🎉 Tüm Yükleme Tamamlandı! (${totalBoxes} Kutu)`);
+      setLayerNotice(t.allCompletedNotice(totalBoxes));
       return;
     }
 
-    // Base interval adjusted by speed: e.g. 140ms / playSpeed
     const baseInterval = 140 / playSpeed;
 
     const timer = setTimeout(() => {
       const nextCount = visibleCount + 1;
-
-      // Check if nextCount completes a layer
       const completedLayer = layers.find((l) => l.endIndex + 1 === nextCount);
 
       if (completedLayer) {
         const isLastLayer = completedLayer.layerIndex === layers.length;
-        if (isLastLayer) {
-          setLayerNotice(`✓ Son Kat (Kat ${completedLayer.layerIndex}) Tamamlandı! Toplam ${totalBoxes} kutu.`);
-        } else {
-          setLayerNotice(`✓ Kat ${completedLayer.layerIndex} Tamamlandı (${completedLayer.boxCount} Kutu) — Kat ${completedLayer.layerIndex + 1}'e Geçiliyor`);
-        }
+        setLayerNotice(
+          t.layerCompletedNotice(
+            completedLayer.layerIndex,
+            completedLayer.boxCount,
+            isLastLayer ? undefined : completedLayer.layerIndex + 1
+          )
+        );
 
         setIsLayerTransitioning(true);
         setVisibleCount(nextCount);
 
-        // Pause slightly longer at layer milestone so the user clearly sees it
         setTimeout(() => {
           setIsLayerTransitioning(false);
         }, 650 / playSpeed);
@@ -327,7 +377,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
     }, isLayerTransitioning ? (700 / playSpeed) : baseInterval);
 
     return () => clearTimeout(timer);
-  }, [isPlaying, visibleCount, totalBoxes, playSpeed, packResult, layers, isLayerTransitioning, isRecordingVideo]);
+  }, [isPlaying, visibleCount, totalBoxes, playSpeed, packResult, layers, isLayerTransitioning, isRecordingVideo, t]);
 
   // Video Recording Process
   const handleRecordVideo = useCallback(async () => {
@@ -346,39 +396,35 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
     }
 
     try {
-      // 1. Reset to start
       setVisibleCount(0);
       setLayerNotice(null);
       await new Promise((r) => setTimeout(r, 400));
 
       const stepDelay = Math.max(40, Math.min(100, Math.round(2500 / totalBoxes)));
 
-      // 2. Play animation step by step
       for (let i = 1; i <= totalBoxes; i++) {
         setVisibleCount(i);
         const progress = Math.round((i / totalBoxes) * 100);
         setRecordingProgress(progress);
 
-        // Check layer milestone
         const completedLayer = layers.find((l) => l.endIndex + 1 === i);
         if (completedLayer) {
           const isLast = completedLayer.layerIndex === layers.length;
           setLayerNotice(
-            isLast
-              ? `✓ Kat ${completedLayer.layerIndex} Tamamlandı! Toplam ${totalBoxes} Kutu.`
-              : `✓ Kat ${completedLayer.layerIndex} Tamamlandı (${completedLayer.boxCount} Kutu) — Kat ${completedLayer.layerIndex + 1}'e Geçiliyor`
+            t.layerCompletedNotice(
+              completedLayer.layerIndex,
+              completedLayer.boxCount,
+              isLast ? undefined : completedLayer.layerIndex + 1
+            )
           );
-          // Pause to emphasize completed layer in video
           await new Promise((r) => setTimeout(r, 450));
         } else {
           await new Promise((r) => setTimeout(r, stepDelay));
         }
       }
 
-      // Hold completed frame for 1 second in video
       await new Promise((r) => setTimeout(r, 900));
 
-      // 3. Stop recorder & download
       const videoBlob = await recorder.stop();
       const filename = `mobiqu-yukleme-animasyonu-${outerL}x${outerW}x${outerH}.webm`;
       downloadBlob(videoBlob, filename);
@@ -390,23 +436,21 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
       setIsRecordingVideo(false);
       setRecordingProgress(100);
     }
-  }, [packResult, totalBoxes, layers, outerL, outerW, outerH, setIsRecordingVideo, setRecordingProgress]);
+  }, [packResult, totalBoxes, layers, outerL, outerW, outerH, setIsRecordingVideo, setRecordingProgress, t]);
 
-  // Register record trigger for Topbar & ControlPanel
   useEffect(() => {
     if (onRegisterRecordTrigger) {
       onRegisterRecordTrigger(handleRecordVideo);
     }
   }, [onRegisterRecordTrigger, handleRecordVideo]);
 
-  // Jump to specific layer
   const jumpToLayer = (layer: LayerInfo) => {
     setIsPlaying(false);
     setVisibleCount(layer.endIndex + 1);
-    setLayerNotice(`Kat ${layer.layerIndex} (${layer.boxCount} Kutu, Z: ${Math.round(layer.minZ)} - ${Math.round(layer.maxZ)} mm)`);
+    setLayerNotice(`${t.hudLayer} ${layer.layerIndex} (${layer.boxCount} ${t.hudTotalBoxes})`);
   };
 
-  // Build Scene whenever inputs, results, or visibleCount changes
+  // Build Scene Geometries
   useEffect(() => {
     const group = groupRef.current;
     if (!group) return;
@@ -459,15 +503,35 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
     contFace.renderOrder = -1;
     group.add(contFace);
 
-    // Floor grid
+    // Directional shadow tuning for sharp inner self-shadowing between boxes
+    if (keyLightRef.current) {
+      const bound = Math.max(L * scale, W * scale, H * scale) * 1.2;
+      const kl = keyLightRef.current;
+      kl.position.set(bound * 1.8, bound * 2.6, bound * 1.8);
+      kl.shadow.camera.left = -bound;
+      kl.shadow.camera.right = bound;
+      kl.shadow.camera.top = bound;
+      kl.shadow.camera.bottom = -bound;
+      kl.shadow.camera.near = 0.5;
+      kl.shadow.camera.far = bound * 6;
+      kl.shadow.bias = -0.0004;
+      kl.shadow.normalBias = 0.025;
+      kl.shadow.camera.updateProjectionMatrix();
+    }
+
+    // Environment: Grid or Seamless Void Photo Booth
     const gridDim = Math.max(L, W) * scale * 1.5;
-    const gridHelper = new THREE.GridHelper(gridDim, 16, 0x94a3b8, 0x64748b);
-    gridHelper.position.y = 0;
-    (gridHelper.material as THREE.Material).transparent = true;
-    (gridHelper.material as THREE.Material).opacity = 0.2;
-    (gridHelper.material as THREE.Material).depthWrite = false;
-    gridHelper.renderOrder = -2;
-    group.add(gridHelper);
+
+    if (environmentMode === 'grid') {
+      const gridHelper = new THREE.GridHelper(gridDim, 16, 0x94a3b8, 0x64748b);
+      gridHelper.position.y = 0;
+      (gridHelper.material as THREE.Material).transparent = true;
+      (gridHelper.material as THREE.Material).opacity = 0.22;
+      (gridHelper.material as THREE.Material).depthWrite = false;
+      gridHelper.renderOrder = -2;
+      group.add(gridHelper);
+    }
+    // In Photo Booth mode: NO ground disc, NO grid, NO pedestal. Infinite seamless void!
 
     // Color map
     const colorMap: Record<string, string> = {};
@@ -475,9 +539,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
       colorMap[item.key] = item.color;
     }
 
-    // Filter by animation visibleCount
     const animatedPlacements = sortedPlacements.slice(0, visibleCount);
-
     const isDense = animatedPlacements.length <= 1500;
 
     if (isDense) {
@@ -493,11 +555,13 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
         );
         const mat = new THREE.MeshStandardMaterial({
           color,
-          roughness: 0.35,
-          metalness: 0.05,
-          wireframe: wireframeMode,
+          roughness: specularReflection ? 0.22 : 1.0,
+          metalness: specularReflection ? 0.12 : 0.0,
         });
         const mesh = new THREE.Mesh(geo, mat);
+        // Inter-box self shadows (boxes shadow each other, no ground shadow)
+        mesh.castShadow = objectShadows;
+        mesh.receiveShadow = objectShadows;
         mesh.renderOrder = 1;
         mesh.position.set(
           (p.x + p.dx / 2 - L / 2) * scale,
@@ -506,24 +570,21 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
         );
         group.add(mesh);
 
-        if (!wireframeMode) {
-          const edges = new THREE.EdgesGeometry(geo);
-          const edgeLine = new THREE.LineSegments(
-            edges,
-            new THREE.LineBasicMaterial({
-              color: 0x0f172a,
-              transparent: true,
-              opacity: 0.35,
-              depthWrite: false,
-            })
-          );
-          edgeLine.position.copy(mesh.position);
-          edgeLine.renderOrder = 2;
-          group.add(edgeLine);
-        }
+        const edges = new THREE.EdgesGeometry(geo);
+        const edgeLine = new THREE.LineSegments(
+          edges,
+          new THREE.LineBasicMaterial({
+            color: 0x0f172a,
+            transparent: true,
+            opacity: 0.35,
+            depthWrite: false,
+          })
+        );
+        edgeLine.position.copy(mesh.position);
+        edgeLine.renderOrder = 2;
+        group.add(edgeLine);
       });
     } else {
-      // Instanced Rendering for massive counts
       const byOrientation: Record<
         string,
         { dx: number; dy: number; dz: number; items: typeof animatedPlacements }
@@ -546,11 +607,12 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
         );
         const mat = new THREE.MeshStandardMaterial({
           color,
-          roughness: 0.35,
-          metalness: 0.05,
-          wireframe: wireframeMode,
+          roughness: specularReflection ? 0.22 : 1.0,
+          metalness: specularReflection ? 0.12 : 0.0,
         });
         const inst = new THREE.InstancedMesh(geo, mat, o.items.length);
+        inst.castShadow = objectShadows;
+        inst.receiveShadow = objectShadows;
         inst.frustumCulled = false;
         inst.renderOrder = 1;
         const dummy = new THREE.Object3D();
@@ -566,32 +628,38 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
         group.add(inst);
       }
     }
-  }, [packResult, summaries, outerL, outerW, outerH, wireframeMode, visibleCount, isPlaying]);
+  }, [packResult, summaries, outerL, outerW, outerH, visibleCount, isPlaying, environmentMode, objectShadows, specularReflection]);
 
   return (
-    <main className="flex-1 flex flex-col h-full min-w-0 bg-slate-50 dark:bg-slate-950 relative overflow-hidden select-none">
+    <main
+      className={`flex-1 flex flex-col h-full min-w-0 relative overflow-hidden select-none transition-colors duration-300 ${
+        environmentMode === 'photobooth'
+          ? 'bg-white dark:bg-[#070a10]'
+          : 'bg-gradient-to-b from-slate-100/70 via-slate-50 to-slate-100 dark:from-slate-950 dark:via-slate-900/90 dark:to-slate-950'
+      }`}
+    >
       {/* Top Floating Metric Bar */}
       {packResult && hasCalculated ? (
-        <div className="absolute top-4 left-4 right-4 z-10 flex flex-wrap items-center justify-between gap-3 p-3.5 glass-panel border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm">
+        <div className="absolute top-4 left-4 right-4 z-10 flex flex-wrap items-center justify-between gap-3 p-3.5 apple-glass rounded-2xl shadow-sm">
           {/* Metric 1: Count */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-sky-50 dark:bg-sky-950/60 border border-sky-100 dark:border-sky-800 flex items-center justify-center text-sky-600 dark:text-sky-400">
+            <div className="w-10 h-10 rounded-2xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center border border-sky-400/20 shadow-xs">
               <Box className="w-5 h-5" />
             </div>
             <div>
               <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                Yüklenen Kutu
+                {t.hudLoadedBoxes}
               </span>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-xl font-extrabold text-slate-900 dark:text-white tabular-nums">
                   {visibleCount}
                 </span>
                 <span className="text-xs font-semibold text-slate-400">
-                  / {totalBoxes} adet
+                  / {totalBoxes} {t.hudTotalBoxes}
                 </span>
                 {currentActiveLayer && (
-                  <span className="ml-1 text-[11px] font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950 px-2 py-0.5 rounded-full border border-sky-200 dark:border-sky-800">
-                    Kat {currentActiveLayer.layerIndex} / {layers.length}
+                  <span className="ml-1 text-[11px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 dark:bg-sky-400/10 px-2.5 py-0.5 rounded-full border border-sky-400/20">
+                    {t.hudLayer} {currentActiveLayer.layerIndex} / {layers.length}
                   </span>
                 )}
               </div>
@@ -602,13 +670,13 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
           <div className="flex-1 max-w-xs px-2 hidden sm:block">
             <div className="flex items-center justify-between text-xs mb-1">
               <span className="font-semibold text-slate-600 dark:text-slate-300">
-                Doluluk Oranı
+                {t.hudEfficiency}
               </span>
               <span className="font-bold text-sky-600 dark:text-sky-400 tabular-nums">
                 %{formatNumber(packResult.efficiency)}
               </span>
             </div>
-            <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div className="w-full h-2 bg-slate-200/80 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
               <div
                 className="h-full bg-gradient-to-r from-sky-500 to-teal-400 rounded-full transition-all duration-300"
                 style={{
@@ -622,7 +690,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
           <div className="flex items-center gap-3">
             <div className="text-right hidden md:block">
               <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                Dolu Hacim
+                {t.hudFilledVol}
               </span>
               <span className="text-xs font-bold text-slate-800 dark:text-slate-200 tabular-nums">
                 {toLiters(packResult.usedVolume * (visibleCount / (totalBoxes || 1)))}
@@ -636,23 +704,23 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
               <button
                 type="button"
                 onClick={onExportPdf}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-xs"
-                title="Kat Kat Yükleme Rehberi PDF İndir"
+                className="flex items-center gap-1.5 px-3 py-1.5 apple-glass-card hover:bg-white dark:hover:bg-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 transition-all shadow-xs"
+                title={t.pdfExport}
               >
                 <FileText className="w-3.5 h-3.5 text-rose-500" />
-                <span className="hidden sm:inline">PDF Rehber</span>
+                <span className="hidden sm:inline">{t.pdfExport}</span>
               </button>
 
               <button
                 type="button"
                 disabled={isRecordingVideo}
                 onClick={handleRecordVideo}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors shadow-xs ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shadow-xs ${
                   isRecordingVideo
                     ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                    : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    : 'apple-glass-card hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
                 }`}
-                title="Yükleme Animasyonunu Video (WebM) Olarak İndir"
+                title={t.videoExport}
               >
                 {isRecordingVideo ? (
                   <>
@@ -662,7 +730,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
                 ) : (
                   <>
                     <Video className="w-3.5 h-3.5 text-sky-500" />
-                    <span className="hidden sm:inline">Video Kaydet</span>
+                    <span className="hidden sm:inline">{t.videoExport}</span>
                   </>
                 )}
               </button>
@@ -671,38 +739,37 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
         </div>
       ) : null}
 
-      {/* Layer Milestone Banner (Appears when a layer is completed) */}
+      {/* Layer Milestone Banner */}
       {layerNotice && (
         <div className="absolute top-24 left-1/2 -translate-x-1/2 z-20 pointer-events-none transition-all duration-300 animate-in fade-in slide-in-from-top-2">
-          <div className="px-4 py-2 bg-slate-900/90 dark:bg-slate-800/95 text-white border border-sky-400/30 rounded-xl shadow-xl backdrop-blur-md flex items-center gap-2.5 text-xs font-bold">
+          <div className="px-4 py-2.5 apple-glass text-slate-900 dark:text-white rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-bold border border-sky-400/30">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             <span>{layerNotice}</span>
           </div>
         </div>
       )}
 
-      {/* Recording Video Modal / Banner */}
+      {/* Recording Video Modal */}
       {isRecordingVideo && (
         <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs z-30 flex flex-col items-center justify-center p-6 text-center select-none pointer-events-none">
-          <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-sm w-full">
-            <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-3">
+          <div className="p-6 apple-glass rounded-3xl shadow-2xl max-w-sm w-full">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-3">
               <Video className="w-6 h-6 animate-pulse" />
             </div>
             <h4 className="text-base font-bold text-slate-900 dark:text-white mb-1">
-              Yükleme Animasyonu Kaydediliyor
+              {t.videoRecordingModalTitle}
             </h4>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              Kutular sırayla kat kat yüklenirken 3D WebGL sahnesi video dosyası olarak yakalanıyor.
+              {t.videoRecordingModalDesc}
             </p>
-            {/* Progress Bar */}
-            <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-2">
+            <div className="w-full h-2.5 bg-slate-200/80 dark:bg-slate-800 rounded-full overflow-hidden mb-2">
               <div
                 className="h-full bg-amber-500 transition-all duration-200"
                 style={{ width: `${recordingProgress}%` }}
               />
             </div>
             <div className="flex justify-between text-[11px] font-bold text-slate-600 dark:text-slate-400">
-              <span>Kutu {visibleCount} / {totalBoxes}</span>
+              <span>{t.hudLoadedBoxes} {visibleCount} / {totalBoxes}</span>
               <span>%{recordingProgress}</span>
             </div>
           </div>
@@ -713,36 +780,194 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
       <div
         id="canvas-holder"
         ref={containerRef}
-        className="flex-1 w-full h-full relative cursor-grab active:cursor-grabbing"
+        className="flex-1 min-h-0 w-full relative cursor-grab active:cursor-grabbing overflow-hidden transition-[height,flex] duration-300 ease-out"
       >
-        {/* Empty State Overlay */}
+        {/* Initial Uncalculated Hero Screen with User's Uploaded Mobiqu Fleet Image */}
         {!hasCalculated && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 pointer-events-none">
-            <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-lg flex items-center justify-center text-sky-600 dark:text-sky-400 mb-4">
-              <Box className="w-8 h-8" />
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 text-center overflow-hidden">
+            {/* The Background Mobiqu Fleet Image */}
+            <img
+              src="/assets/aistudio/image_da845260.png"
+              alt="Mobiqu Thermal Packaging Fleet"
+              className="absolute inset-0 w-full h-full object-cover object-center filter dark:brightness-[0.78] transition-all duration-700 select-none pointer-events-none"
+            />
+
+            {/* Subtle Gradient Vignette to keep card text & button perfectly readable */}
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-900/20 to-slate-950/40 pointer-events-none" />
+
+            {/* Floating Apple Glass Showcase Card */}
+            <div className="relative z-10 max-w-lg mx-auto p-6 sm:p-8 apple-glass rounded-3xl shadow-2xl text-center border border-white/70 dark:border-white/10 animate-in fade-in zoom-in-95">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/15 dark:bg-sky-400/15 border border-sky-400/30 text-sky-600 dark:text-sky-300 text-[11px] font-bold uppercase tracking-wider mb-3">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>MOBIQU PASSIVE & ACTIVE THERMAL FLEET</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight mb-2">
+                {t.emptyTitle}
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-md mx-auto mb-5 leading-relaxed font-medium">
+                {t.emptyDesc}
+              </p>
+              <div className="flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={onLoadSample}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-sky-600 to-sky-500 hover:from-sky-500 hover:to-sky-400 text-white text-xs sm:text-sm font-bold rounded-2xl shadow-lg shadow-sky-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{t.emptyBtn}</span>
+                </button>
+              </div>
             </div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-              3D Yük Yerleşim Simülatörü
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mb-5 leading-relaxed">
-              Sol menüden konteyner ve kutu ölçülerini seçin, kat kat yükleme animasyonunu izleyin ve PDF / Video olarak dışa aktarın.
-            </p>
-            <button
-              type="button"
-              onClick={onLoadSample}
-              className="pointer-events-auto inline-flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl shadow-md transition-colors"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Hızlı Örneği Yükle & Başlat</span>
-            </button>
           </div>
         )}
 
+        {/* Floating Viewport & Environment Controls Toolbar (Top Right) */}
+        {hasCalculated && (
+          <div className="absolute top-26 sm:top-24 right-4 z-20 flex flex-col items-end gap-2">
+            {/* Environment & Lighting Dropdown Button */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowEnvDropdown((prev) => !prev)}
+                className="flex items-center gap-1.5 px-3 py-1.5 apple-glass rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 transition-all shadow-xs cursor-pointer"
+                title={t.envButton}
+              >
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>{t.envButton}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {showEnvDropdown && (
+              <div className="absolute right-0 top-10 w-60 apple-glass rounded-2xl shadow-xl p-3 text-xs z-30 border border-white/60 dark:border-white/10 space-y-3 animate-in fade-in zoom-in-95">
+                {/* Environment Mode: Grid vs Photo Booth */}
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    {t.envButton}
+                  </span>
+                  <div className="grid grid-cols-2 gap-1.5 p-0.5 rounded-xl bg-slate-200/50 dark:bg-slate-800/50 border border-slate-300/30 dark:border-slate-700/40">
+                    <button
+                      type="button"
+                      onClick={() => setEnvironmentMode('grid')}
+                      className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                        environmentMode === 'grid'
+                          ? 'bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-300 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Grid className="w-3 h-3" />
+                      <span>{t.envGrid}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEnvironmentMode('photobooth')}
+                      className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                        environmentMode === 'photobooth'
+                          ? 'bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-300 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      <span>{t.envPhotobooth}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Color Palette Selector */}
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
+                    <Palette className="w-3 h-3 text-sky-500" />
+                    {t.paletteButton}
+                  </span>
+                  <div className="grid grid-cols-3 gap-1 p-0.5 rounded-xl bg-slate-200/50 dark:bg-slate-800/50 border border-slate-300/30 dark:border-slate-700/40">
+                    <button
+                      type="button"
+                      onClick={() => onPaletteModeChange('vibrant')}
+                      className={`py-1 rounded-lg font-bold text-[10px] transition-all text-center cursor-pointer ${
+                        paletteMode === 'vibrant'
+                          ? 'bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-300 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      {t.paletteVibrant}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onPaletteModeChange('pastel')}
+                      className={`py-1 rounded-lg font-bold text-[10px] transition-all text-center cursor-pointer ${
+                        paletteMode === 'pastel'
+                          ? 'bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-300 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      {t.palettePastel}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onPaletteModeChange('monochrome')}
+                      className={`py-1 rounded-lg font-bold text-[10px] transition-all text-center cursor-pointer ${
+                        paletteMode === 'monochrome'
+                          ? 'bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-300 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      {t.paletteMonochrome}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Object Shadows Toggle (Inter-Box Self Shadows) */}
+                <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/60 dark:border-slate-800/80">
+                  <div className="flex items-center gap-2">
+                    <Sun className="w-3.5 h-3.5 text-slate-500" />
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 text-[11px]">
+                      {t.shadowsButton}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setObjectShadows((prev) => !prev)}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                      objectShadows
+                        ? 'bg-sky-500 text-white shadow-xs'
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                    }`}
+                  >
+                    {objectShadows ? t.on : t.off}
+                  </button>
+                </div>
+
+                {/* Specular Reflection (Işık Yansıması) Toggle */}
+                <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/60 dark:border-slate-800/80">
+                  <div className="flex items-center gap-2">
+                    <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 text-[11px]">
+                      {t.reflectionButton}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSpecularReflection((prev) => !prev)}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                      specularReflection
+                        ? 'bg-sky-500 text-white shadow-xs'
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                    }`}
+                  >
+                    {specularReflection ? t.on : t.off}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
         {/* Floating Animation & Viewport Control Panel (Bottom) */}
         {hasCalculated && totalBoxes > 0 && (
-          <div className="absolute bottom-4 left-4 right-4 z-10 flex flex-col sm:flex-row items-center justify-between gap-3 pointer-events-none">
+          <div className="absolute bottom-3 sm:bottom-4 left-4 right-4 z-10 flex flex-col sm:flex-row items-center justify-between gap-3 pointer-events-none transition-all duration-300">
             {/* Main Animation Controller Bar */}
-            <div className="pointer-events-auto flex flex-wrap items-center gap-2 p-2 glass-panel border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-lg text-xs w-full sm:w-auto">
+            <div className="pointer-events-auto flex flex-wrap items-center gap-2 p-2 apple-glass rounded-2xl shadow-lg text-xs w-full sm:w-auto">
               {/* Play / Pause */}
               <button
                 type="button"
@@ -754,8 +979,8 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
                     setIsPlaying(!isPlaying);
                   }
                 }}
-                className="w-8 h-8 rounded-xl bg-sky-600 hover:bg-sky-500 text-white flex items-center justify-center shadow-xs transition-colors shrink-0"
-                title={isPlaying ? 'Animasyonu Duraklat' : 'Animasyonu Oynat'}
+                className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-600 to-sky-500 hover:from-sky-500 hover:to-sky-400 text-white flex items-center justify-center shadow-xs transition-all shrink-0 active:scale-95"
+                title={isPlaying ? t.animPause : t.animPlay}
               >
                 {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white" />}
               </button>
@@ -768,14 +993,14 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
                   setVisibleCount(0);
                   setLayerNotice(null);
                 }}
-                className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                title="Başa Sar"
+                className="p-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-slate-800 transition-all"
+                title={t.animRewind}
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
 
               {/* Step Back / Step Forward */}
-              <div className="flex items-center gap-0.5 border-x border-slate-200 dark:border-slate-800 px-1">
+              <div className="flex items-center gap-0.5 border-x border-slate-300/40 dark:border-slate-800 px-1">
                 <button
                   type="button"
                   disabled={visibleCount <= 0}
@@ -783,8 +1008,8 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
                     setIsPlaying(false);
                     setVisibleCount((prev) => Math.max(0, prev - 1));
                   }}
-                  className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 transition-colors"
-                  title="Bir Kutu Geri"
+                  className="p-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-slate-800 disabled:opacity-40 transition-all"
+                  title={t.animStepBack}
                 >
                   <SkipBack className="w-3.5 h-3.5" />
                 </button>
@@ -795,8 +1020,8 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
                     setIsPlaying(false);
                     setVisibleCount((prev) => Math.min(totalBoxes, prev + 1));
                   }}
-                  className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 transition-colors"
-                  title="Bir Kutu İleri"
+                  className="p-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-slate-800 disabled:opacity-40 transition-all"
+                  title={t.animStepForward}
                 >
                   <SkipForward className="w-3.5 h-3.5" />
                 </button>
@@ -821,16 +1046,16 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
               </div>
 
               {/* Speed Selector */}
-              <div className="flex items-center gap-1 border-l border-slate-200 dark:border-slate-800 pl-1.5">
+              <div className="flex items-center gap-1 border-l border-slate-300/40 dark:border-slate-800 pl-1.5">
                 {[0.5, 1, 2, 4].map((spd) => (
                   <button
                     key={spd}
                     type="button"
                     onClick={() => setPlaySpeed(spd)}
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                    className={`px-1.5 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
                       playSpeed === spd
-                        ? 'bg-sky-600 text-white'
-                        : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        ? 'bg-sky-500 text-white shadow-2xs'
+                        : 'text-slate-500 hover:bg-white/60 dark:hover:bg-slate-800'
                     }`}
                   >
                     {spd}x
@@ -846,21 +1071,21 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
                     setIsPlaying(false);
                     setVisibleCount(totalBoxes);
                   }}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-[10px] font-bold transition-colors"
-                  title="Tüm kutuları yerleştir"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/70 dark:bg-slate-800/70 hover:bg-white text-slate-700 dark:text-slate-300 text-[10px] font-bold transition-all shadow-2xs"
+                  title={t.animFinish}
                 >
                   <Check className="w-3 h-3 text-emerald-500" />
-                  <span>Bitir</span>
+                  <span>{t.animFinish}</span>
                 </button>
               )}
             </div>
 
             {/* Quick Layer Jump Badges & Camera toolbar */}
-            <div className="pointer-events-auto flex items-center gap-2 p-1.5 glass-panel border border-slate-200/80 dark:border-slate-800 rounded-xl shadow-lg text-xs">
+            <div className="pointer-events-auto flex items-center gap-2 p-1.5 apple-glass rounded-2xl shadow-lg text-xs">
               {/* Layers List */}
-              <div className="flex items-center gap-1 border-r border-slate-200 dark:border-slate-800 pr-1.5">
+              <div className="flex items-center gap-1 border-r border-slate-300/40 dark:border-slate-800 pr-1.5">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 hidden md:inline">
-                  Katlar:
+                  {t.layersLabel}
                 </span>
                 {layers.map((layer) => {
                   const isActive = currentActiveLayer?.layerIndex === layer.layerIndex;
@@ -869,14 +1094,14 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
                       key={layer.layerIndex}
                       type="button"
                       onClick={() => jumpToLayer(layer)}
-                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         isActive
-                          ? 'bg-sky-600 text-white shadow-xs'
-                          : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                          ? 'bg-sky-500 text-white shadow-xs'
+                          : 'bg-white/60 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700'
                       }`}
-                      title={`Kat ${layer.layerIndex}: ${layer.boxCount} Kutu (Z: ${Math.round(layer.minZ)} - ${Math.round(layer.maxZ)} mm)`}
+                      title={`${t.hudLayer} ${layer.layerIndex}: ${layer.boxCount} ${t.hudTotalBoxes} (Z: ${Math.round(layer.minZ)} - ${Math.round(layer.maxZ)} mm)`}
                     >
-                      Kat {layer.layerIndex}
+                      {t.hudLayer} {layer.layerIndex}
                     </button>
                   );
                 })}
@@ -887,38 +1112,37 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
                 <button
                   type="button"
                   onClick={() => setViewAngle('iso')}
-                  className="px-2 py-1 font-semibold rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                  title="İzometrik 3D Görünüm"
+                  className="px-2 py-1 font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-slate-800 transition-all"
+                  title={t.view3D}
                 >
-                  3D
+                  {t.view3D}
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewAngle('top')}
-                  className="px-2 py-1 font-semibold rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                  title="Kuşbakışı (Üstten) Görünüm"
+                  className="px-2 py-1 font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-slate-800 transition-all"
+                  title={t.viewTop}
                 >
-                  Üst
+                  {t.viewTop}
                 </button>
                 <button
                   type="button"
                   onClick={resetCamera}
-                  className="p-1 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                  title="Kamerayı Sıfırla"
+                  className="p-1 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-slate-800 transition-all"
+                  title={t.viewReset}
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
                 <button
                   type="button"
-                  onClick={() => setWireframeMode((prev) => !prev)}
-                  className={`p-1 rounded-lg transition-colors ${
-                    wireframeMode
-                      ? 'bg-sky-600 text-white'
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-                  title="Tel Kafes Görünümü"
+                  onClick={onShuffleColors}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-white/70 dark:hover:bg-slate-800 transition-all font-semibold text-xs apple-glass-card shadow-2xs cursor-pointer active:scale-95"
+                  title={t.shuffleColorsDesc}
                 >
-                  <Eye className="w-3.5 h-3.5" />
+                  <Shuffle className="w-3.5 h-3.5 text-sky-500" />
+                  <span className="hidden sm:inline">
+                    {t.shuffleColors}
+                  </span>
                 </button>
               </div>
             </div>
@@ -926,44 +1150,128 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
         )}
       </div>
 
-      {/* Bottom Orientation & Loading Stats Bar */}
+      {/* Bottom Orientation & 3D Isometric Previews Drawer */}
       {hasCalculated && (
-        <div className="border-t border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm px-4 py-2.5 shrink-0 flex items-center justify-between gap-4 overflow-x-auto text-xs">
-          <div className="flex items-center gap-4">
-            <span className="font-bold uppercase tracking-wider text-[11px] text-slate-400 shrink-0 flex items-center gap-1.5">
-              <Compass className="w-3.5 h-3.5 text-slate-400" />
-              Yönelimler:
-            </span>
-            {summaries.length === 0 ? (
-              <span className="text-slate-400">Uygun yerleşim bulunamadı</span>
-            ) : (
-              summaries.map((s) => (
-                <div
-                  key={s.key}
-                  className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 shrink-0"
-                >
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: s.color }}
-                  />
-                  <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
-                    {formatNumber(s.dx, 0)} × {formatNumber(s.dy, 0)} × {formatNumber(s.dz, 0)} mm
-                  </span>
-                  <span className="text-slate-400">·</span>
-                  <span className="font-bold text-slate-900 dark:text-white tabular-nums">
-                    {s.count} adet
-                  </span>
-                  <span className="text-[10px] text-slate-400 tabular-nums">
-                    (%{formatNumber(s.percentage, 0)})
-                  </span>
+        <div className="border-t border-white/60 dark:border-white/10 apple-glass shrink-0 transition-all duration-300">
+          {/* Expanded Drawer: Shows static 3D isometric model render cards for each orientation */}
+          {isOrientationsExpanded && (
+            <div className="px-4 py-2.5 border-b border-white/40 dark:border-white/10 animate-in slide-in-from-bottom-2 duration-300 max-h-[250px] overflow-y-auto">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-2xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0 border border-sky-500/20 shadow-2xs">
+                    <Box className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white tracking-tight">
+                      {t.orientationsDetailTitle}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {t.orientationsDetailDesc}
+                    </p>
+                  </div>
                 </div>
-              ))
-            )}
-          </div>
+                <button
+                  type="button"
+                  onClick={() => setIsOrientationsExpanded(false)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-white/60 dark:hover:bg-slate-800 transition cursor-pointer"
+                  title={t.collapseOrientations}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500 shrink-0">
-            <Zap className="w-3.5 h-3.5 text-amber-500" />
-            <span>Kutu sırası: Taban Kat 1'den başlayıp tavana doğru kademelendirilir</span>
+              {summaries.length === 0 ? (
+                <div className="py-6 text-center text-xs text-slate-400">
+                  {t.noPlacement}
+                </div>
+              ) : (
+                <div className="flex items-stretch gap-3 overflow-x-auto pb-1 pt-1">
+                  {summaries.map((s, idx) => (
+                    <Orientation3DCard
+                      key={s.key}
+                      summary={s}
+                      index={idx}
+                      language={language}
+                      isDark={isDark}
+                      specular={specularReflection}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Bottom Bar: Expand/Collapse Arrow Button + Summaries + Sequence Tip */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-4 overflow-x-auto text-xs">
+            <div className="flex items-center gap-3">
+              {/* Upward / Downward Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setIsOrientationsExpanded((prev) => !prev)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                  isOrientationsExpanded
+                    ? 'bg-sky-500 text-white shadow-sky-500/20'
+                    : 'apple-glass-card hover:bg-white/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
+                }`}
+                title={isOrientationsExpanded ? t.collapseOrientations : t.expandOrientations}
+              >
+                <ChevronUp
+                  className={`w-4 h-4 transition-transform duration-300 ${
+                    isOrientationsExpanded ? 'rotate-180 text-white' : 'text-sky-500'
+                  }`}
+                />
+                <span>{t.orientationsLabel}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                    isOrientationsExpanded
+                      ? 'bg-white/20 text-white'
+                      : 'bg-sky-500/15 text-sky-600 dark:text-sky-400'
+                  }`}
+                >
+                  {summaries.length}
+                </span>
+                <span className="text-[11px] font-normal text-slate-400 dark:text-slate-400 hidden sm:inline ml-0.5">
+                  ({isOrientationsExpanded ? t.collapseOrientations : t.expandOrientations})
+                </span>
+              </button>
+
+              {/* In collapsed mode: Compact Summary Chips */}
+              {summaries.length === 0 ? (
+                <span className="text-slate-400">{t.noPlacement}</span>
+              ) : (
+                <div className="flex items-center gap-2 overflow-x-auto">
+                  {summaries.map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setIsOrientationsExpanded(true)}
+                      className="flex items-center gap-2 px-2.5 py-1 rounded-xl apple-glass-card hover:bg-white/70 dark:hover:bg-slate-800/80 transition text-left cursor-pointer shrink-0"
+                      title={t.expandOrientations}
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
+                        style={{ backgroundColor: s.color }}
+                      />
+                      <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
+                        {formatNumber(s.dx, 0)} × {formatNumber(s.dy, 0)} × {formatNumber(s.dz, 0)} mm
+                      </span>
+                      <span className="text-slate-400">·</span>
+                      <span className="font-bold text-slate-900 dark:text-white tabular-nums">
+                        {s.count} {t.hudTotalBoxes}
+                      </span>
+                      <span className="text-[10px] text-slate-400 tabular-nums">
+                        (%{formatNumber(s.percentage, 0)})
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500 shrink-0">
+              <Zap className="w-3.5 h-3.5 text-amber-500" />
+              <span>{t.orderTip}</span>
+            </div>
           </div>
         </div>
       )}

@@ -9,6 +9,12 @@ export type TempRange = '+2/+8' | '-25/-15' | '+15/+25';
 
 export type RotationMode = 'z' | 'free';
 
+export type Language = 'tr' | 'en';
+
+export type EnvironmentMode = 'grid' | 'photobooth';
+
+export type PaletteMode = 'vibrant' | 'pastel' | 'monochrome';
+
 export interface Placement {
   x: number;
   y: number;
@@ -61,7 +67,9 @@ export interface OrientationSummary {
 export interface BoxPreset {
   id: string;
   name: string;
+  nameEn?: string;
   category: string;
+  categoryEn?: string;
   l: number;
   w: number;
   h: number;

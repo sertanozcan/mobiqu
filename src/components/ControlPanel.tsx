@@ -10,12 +10,14 @@ import {
   FileText,
   Video,
 } from 'lucide-react';
-import { TempRange, RotationMode, Product } from '../types';
+import { TempRange, RotationMode, Product, Language } from '../types';
 import { PRODUCTS_FIXED, PRODUCTS_TEMP } from '../data/products';
 import { BOX_PRESETS } from '../data/presets';
 import { toLiters } from '../solver/packer';
+import { useTranslation } from '../i18n/translations';
 
 interface ControlPanelProps {
+  language: Language;
   tempRange: TempRange | '';
   onTempChange: (temp: TempRange | '') => void;
   selectedProductKey: string;
@@ -40,6 +42,7 @@ interface ControlPanelProps {
 }
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
+  language,
   tempRange,
   onTempChange,
   selectedProductKey,
@@ -62,6 +65,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onExportVideo,
   isRecordingVideo = false,
 }) => {
+  const t = useTranslation(language);
+
   const handleTempSelect = (range: TempRange) => {
     onTempChange(range);
     onProductChange('', null);
@@ -91,7 +96,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     }
   };
 
-  // Calculations for display
   const outerVolumeMm3 =
     outerL && outerW && outerH ? outerL * outerW * outerH : null;
   const singleBoxVolumeMm3 =
@@ -100,29 +104,29 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
       : null;
 
   return (
-    <aside className="w-full md:w-84 lg:w-96 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col h-full overflow-y-auto shrink-0 select-none">
-      <div className="p-4 md:p-6 space-y-6">
-        {/* Step 1: Container / Outer Box */}
-        <section className="space-y-3">
+    <aside className="w-full md:w-88 lg:w-96 apple-glass border-r border-white/60 dark:border-white/10 flex flex-col h-full overflow-y-auto shrink-0 select-none">
+      <div className="p-4 md:p-5 space-y-4">
+        {/* Step 1: Container Card */}
+        <section className="apple-glass-card rounded-2xl p-4 space-y-3.5 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
-              <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center justify-center text-[11px] font-bold">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 inline-flex items-center justify-center text-[11px] font-bold">
                 1
               </span>
-              Dış Yük Hacmi (Konteyner)
+              {t.step1Title}
             </h2>
           </div>
 
           {/* Temperature Range Selector */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
-              Sıcaklık Aralığı
+            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
+              {t.tempRangeLabel}
             </label>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { range: '+2/+8', label: '+2 / +8 °C', sub: 'Soğuk Zincir' },
-                { range: '-25/-15', label: '-25 / -15 °C', sub: 'Donuk' },
-                { range: '+15/+25', label: '+15 / +25 °C', sub: 'Oda Sıcaklığı' },
+                { range: '+2/+8', label: '+2 / +8 °C', sub: t.tempCold },
+                { range: '-25/-15', label: '-25 / -15 °C', sub: t.tempFrozen },
+                { range: '+15/+25', label: '+15 / +25 °C', sub: t.tempRoom },
               ].map((item) => {
                 const isSelected = tempRange === item.range;
                 return (
@@ -130,10 +134,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     key={item.range}
                     type="button"
                     onClick={() => handleTempSelect(item.range as TempRange)}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                    className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                       isSelected
-                        ? 'border-sky-600 bg-sky-50 dark:bg-sky-950/40 dark:border-sky-500 text-sky-900 dark:text-sky-200 shadow-sm'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
+                        ? 'border-sky-500/80 bg-sky-500/15 dark:bg-sky-400/15 text-sky-950 dark:text-sky-100 shadow-sm ring-1 ring-sky-400/40'
+                        : 'border-white/60 dark:border-white/10 bg-white/40 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-slate-800/80'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
@@ -157,8 +161,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
           {/* Product Dropdown */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
-              Mobiqu Konteyner Modeli
+            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
+              {t.modelLabel}
             </label>
             <div className="relative">
               <select
@@ -166,14 +170,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 disabled={!tempRange}
                 value={selectedProductKey}
                 onChange={handleProductSelect}
-                className="w-full text-xs font-medium bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3 py-2.5 text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full text-xs font-medium bg-white/70 dark:bg-slate-800/70 border border-white/80 dark:border-white/10 rounded-xl px-3 py-2.5 text-slate-900 dark:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-inner"
               >
                 {!tempRange ? (
-                  <option value="">Önce sıcaklık aralığı seçin</option>
+                  <option value="">{t.modelPlaceholderSelectTemp}</option>
                 ) : (
                   <>
-                    <option value="">Konteyner modeli seçin...</option>
-                    <optgroup label="Standart Modeller (Sabit)">
+                    <option value="">{t.modelPlaceholderSelectModel}</option>
+                    <optgroup label={t.groupStandard}>
                       {PRODUCTS_FIXED.map((p, idx) => (
                         <option key={`fixed:${idx}`} value={`fixed:${idx}`}>
                           {p.name} ({p.l} × {p.w} × {p.h} mm — {toLiters(p.l * p.w * p.h)})
@@ -181,7 +185,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       ))}
                     </optgroup>
                     {tempRange && (
-                      <optgroup label={`${tempRange} Modelleri`}>
+                      <optgroup label={t.groupTempSpecific(tempRange)}>
                         {PRODUCTS_TEMP[tempRange]?.map((p, idx) => (
                           <option key={`temp:${idx}`} value={`temp:${idx}`}>
                             {p.name} ({p.l} × {p.w} × {p.h} mm — {toLiters(p.l * p.w * p.h)})
@@ -197,27 +201,27 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
           {/* Dimension Readout Card */}
           {outerL && outerW && outerH && outerVolumeMm3 && (
-            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs">
+            <div className="p-3 bg-white/50 dark:bg-slate-900/40 rounded-xl border border-white/60 dark:border-white/10 text-xs">
               <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-2">
                 <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <Package className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
-                  Konteyner İç Hacmi
+                  {t.containerInnerVolume}
                 </span>
                 <span className="font-bold text-sky-700 dark:text-sky-300 tabular-nums">
                   {toLiters(outerVolumeMm3)}
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="p-1.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200/60 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Uzunluk (L)</span>
+                <div className="p-1.5 bg-white/70 dark:bg-slate-800/70 rounded-lg border border-white/80 dark:border-white/5">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block">{t.lengthLabel}</span>
                   <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{outerL} mm</span>
                 </div>
-                <div className="p-1.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200/60 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Genişlik (W)</span>
+                <div className="p-1.5 bg-white/70 dark:bg-slate-800/70 rounded-lg border border-white/80 dark:border-white/5">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block">{t.widthLabel}</span>
                   <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{outerW} mm</span>
                 </div>
-                <div className="p-1.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200/60 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Yükseklik (H)</span>
+                <div className="p-1.5 bg-white/70 dark:bg-slate-800/70 rounded-lg border border-white/80 dark:border-white/5">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block">{t.heightLabel}</span>
                   <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{outerH} mm</span>
                 </div>
               </div>
@@ -225,20 +229,18 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           )}
         </section>
 
-        <div className="h-px bg-slate-200 dark:bg-slate-800" />
-
         {/* Step 2: Inner Box Dimensions */}
-        <section className="space-y-3">
+        <section className="apple-glass-card rounded-2xl p-4 space-y-3 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
-              <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center justify-center text-[11px] font-bold">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 inline-flex items-center justify-center text-[11px] font-bold">
                 2
               </span>
-              Paketlenecek İç Kutu
+              {t.step2Title}
             </h2>
             {singleBoxVolumeMm3 && (
               <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 tabular-nums">
-                {toLiters(singleBoxVolumeMm3)} / kutu
+                {toLiters(singleBoxVolumeMm3)} / {t.perBoxVolume}
               </span>
             )}
           </div>
@@ -246,27 +248,30 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           {/* Quick Presets */}
           <div>
             <span className="text-[11px] text-slate-500 dark:text-slate-400 block mb-1.5">
-              Hızlı Örnek Ölçüler:
+              {t.quickPresets}
             </span>
             <div className="flex flex-wrap gap-1.5">
-              {BOX_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => applyPreset(preset.id)}
-                  className="px-2.5 py-1 text-[11px] font-medium rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
-                >
-                  {preset.name} ({preset.l}×{preset.w}×{preset.h})
-                </button>
-              ))}
+              {BOX_PRESETS.map((preset) => {
+                const displayName = language === 'en' ? (preset.nameEn || preset.name) : preset.name;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => applyPreset(preset.id)}
+                    className="px-2.5 py-1 text-[11px] font-medium rounded-xl border border-white/60 dark:border-white/10 bg-white/50 dark:bg-slate-800/50 hover:bg-white/90 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all shadow-2xs"
+                  >
+                    {displayName} ({preset.l}×{preset.w}×{preset.h})
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Inputs */}
+          {/* Inputs with Apple frosted styling */}
           <div className="grid grid-cols-3 gap-2">
             <div>
               <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                Uzunluk (l)
+                {t.innerLengthLabel}
               </label>
               <div className="relative">
                 <input
@@ -275,7 +280,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   onChange={(e) => onBoxLChange(e.target.value)}
                   min="0.1"
                   step="any"
-                  className="w-full text-xs font-semibold tabular-nums bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-2.5 py-2 pr-8 text-slate-900 dark:text-white"
+                  className="w-full text-xs font-semibold tabular-nums bg-white/70 dark:bg-slate-800/70 border border-white/80 dark:border-white/10 rounded-xl px-2.5 py-2 pr-7 text-slate-900 dark:text-white shadow-inner"
                 />
                 <span className="absolute right-2.5 top-2 text-[10px] text-slate-400 pointer-events-none">
                   mm
@@ -285,7 +290,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
             <div>
               <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                Genişlik (w)
+                {t.innerWidthLabel}
               </label>
               <div className="relative">
                 <input
@@ -294,7 +299,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   onChange={(e) => onBoxWChange(e.target.value)}
                   min="0.1"
                   step="any"
-                  className="w-full text-xs font-semibold tabular-nums bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-2.5 py-2 pr-8 text-slate-900 dark:text-white"
+                  className="w-full text-xs font-semibold tabular-nums bg-white/70 dark:bg-slate-800/70 border border-white/80 dark:border-white/10 rounded-xl px-2.5 py-2 pr-7 text-slate-900 dark:text-white shadow-inner"
                 />
                 <span className="absolute right-2.5 top-2 text-[10px] text-slate-400 pointer-events-none">
                   mm
@@ -304,7 +309,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
             <div>
               <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                Yükseklik (h)
+                {t.innerHeightLabel}
               </label>
               <div className="relative">
                 <input
@@ -313,7 +318,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   onChange={(e) => onBoxHChange(e.target.value)}
                   min="0.1"
                   step="any"
-                  className="w-full text-xs font-semibold tabular-nums bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-2.5 py-2 pr-8 text-slate-900 dark:text-white"
+                  className="w-full text-xs font-semibold tabular-nums bg-white/70 dark:bg-slate-800/70 border border-white/80 dark:border-white/10 rounded-xl px-2.5 py-2 pr-7 text-slate-900 dark:text-white shadow-inner"
                 />
                 <span className="absolute right-2.5 top-2 text-[10px] text-slate-400 pointer-events-none">
                   mm
@@ -323,42 +328,40 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           </div>
         </section>
 
-        <div className="h-px bg-slate-200 dark:bg-slate-800" />
-
         {/* Step 3: Rotation Permissions */}
-        <section className="space-y-3">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
-            <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center justify-center text-[11px] font-bold">
+        <section className="apple-glass-card rounded-2xl p-4 space-y-2.5 shadow-sm">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 inline-flex items-center justify-center text-[11px] font-bold">
               3
             </span>
-            Döndürme İzni
+            {t.step3Title}
           </h2>
 
           <div className="space-y-2">
             <button
               type="button"
               onClick={() => onRotationModeChange('z')}
-              className={`w-full p-3 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+              className={`w-full p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
                 rotationMode === 'z'
-                  ? 'border-sky-600 bg-sky-50 dark:bg-sky-950/40 dark:border-sky-500 shadow-sm'
-                  : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700'
+                  ? 'border-sky-500/80 bg-sky-500/15 dark:bg-sky-400/15 shadow-sm ring-1 ring-sky-400/40'
+                  : 'border-white/60 dark:border-white/10 bg-white/40 dark:bg-slate-800/40 hover:bg-white/80 dark:hover:bg-slate-800/80'
               }`}
             >
               <div
-                className={`p-2 rounded-lg shrink-0 mt-0.5 ${
+                className={`p-2 rounded-xl shrink-0 mt-0.5 ${
                   rotationMode === 'z'
-                    ? 'bg-sky-600 text-white'
-                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    ? 'bg-sky-500 text-white shadow-sm'
+                    : 'bg-slate-200/70 dark:bg-slate-700/70 text-slate-600 dark:text-slate-300'
                 }`}
               >
                 <Lock className="w-4 h-4" />
               </div>
               <div>
                 <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                  Sadece Dikey (Z) Ekseni
+                  {t.rotZTitle}
                 </span>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mt-0.5">
-                  Yükseklik yönü sabit kalır. Sıvı ilaç, flakon ve dik durması gereken yükler için güvenlidir.
+                  {t.rotZDesc}
                 </p>
               </div>
             </button>
@@ -366,27 +369,27 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             <button
               type="button"
               onClick={() => onRotationModeChange('free')}
-              className={`w-full p-3 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+              className={`w-full p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
                 rotationMode === 'free'
-                  ? 'border-sky-600 bg-sky-50 dark:bg-sky-950/40 dark:border-sky-500 shadow-sm'
-                  : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700'
+                  ? 'border-sky-500/80 bg-sky-500/15 dark:bg-sky-400/15 shadow-sm ring-1 ring-sky-400/40'
+                  : 'border-white/60 dark:border-white/10 bg-white/40 dark:bg-slate-800/40 hover:bg-white/80 dark:hover:bg-slate-800/80'
               }`}
             >
               <div
-                className={`p-2 rounded-lg shrink-0 mt-0.5 ${
+                className={`p-2 rounded-xl shrink-0 mt-0.5 ${
                   rotationMode === 'free'
-                    ? 'bg-sky-600 text-white'
-                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    ? 'bg-sky-500 text-white shadow-sm'
+                    : 'bg-slate-200/70 dark:bg-slate-700/70 text-slate-600 dark:text-slate-300'
                 }`}
               >
                 <RotateCw className="w-4 h-4" />
               </div>
               <div>
                 <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                  3 Eksen Serbest (90°)
+                  {t.rotFreeTitle}
                 </span>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mt-0.5">
-                  Herhangi bir yüz tabana gelebilir. Maksimum doluluk oranı için tüm 6 yön denenir.
+                  {t.rotFreeDesc}
                 </p>
               </div>
             </button>
@@ -395,22 +398,22 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
         {/* Warning Callout */}
         {warningMessage && (
-          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-amber-800 dark:text-amber-200 text-xs flex items-start gap-2.5">
+          <div className="p-3 bg-amber-500/15 border border-amber-400/40 rounded-2xl text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5 backdrop-blur-md">
             <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div className="leading-relaxed">{warningMessage}</div>
           </div>
         )}
 
         {/* Calculate Action Button */}
-        <div className="pt-2 space-y-2">
+        <div className="pt-1 space-y-2">
           <button
             type="button"
             id="runBtn"
             onClick={onCalculate}
-            className="w-full py-3.5 px-4 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold text-sm rounded-xl shadow-md shadow-sky-600/20 hover:shadow-sky-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-3.5 px-4 bg-gradient-to-r from-sky-600 via-sky-500 to-sky-600 hover:from-sky-500 hover:to-sky-400 text-white font-bold text-sm rounded-2xl shadow-lg shadow-sky-500/25 hover:shadow-sky-500/35 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
           >
             <Layers className="w-4 h-4" />
-            <span>Yerleşimi Hesapla</span>
+            <span>{t.calculateBtn}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
 
@@ -419,26 +422,26 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               <button
                 type="button"
                 onClick={onExportPdf}
-                className="py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
-                title="Kat Kat Yükleme Talimatı PDF Raporunu İndir"
+                className="py-2.5 px-3 rounded-2xl apple-glass-card hover:bg-white/80 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-xs"
+                title={t.pdfExport}
               >
                 <FileText className="w-3.5 h-3.5 text-rose-500" />
-                <span>PDF Rehber</span>
+                <span>{t.pdfExport}</span>
               </button>
 
               <button
                 type="button"
                 disabled={isRecordingVideo}
                 onClick={onExportVideo}
-                className={`py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                className={`py-2.5 px-3 rounded-2xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-xs ${
                   isRecordingVideo
-                    ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200'
-                    : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200'
+                    ? 'border-amber-400/60 bg-amber-500/20 text-amber-900 dark:text-amber-200'
+                    : 'apple-glass-card hover:bg-white/80 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200'
                 }`}
-                title="Yükleme Animasyonunu Video (WebM) Olarak İndir"
+                title={t.videoExport}
               >
                 <Video className="w-3.5 h-3.5 text-sky-500" />
-                <span>{isRecordingVideo ? 'Kaydediliyor' : 'Video İndir'}</span>
+                <span>{isRecordingVideo ? t.videoRecording : t.videoExport}</span>
               </button>
             </div>
           )}

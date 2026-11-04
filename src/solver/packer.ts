@@ -1,18 +1,36 @@
-import { Orientation, Placement, RotationMode, PackResult, OrientationSummary, LayerInfo } from '../types';
+import { Orientation, Placement, RotationMode, PackResult, OrientationSummary, LayerInfo, PaletteMode } from '../types';
 
 export const EPS = 1e-6;
 
-// Modern, harmonious design palette with high readability
-export const PALETTE = [
-  '#0284c7', // Sky Blue
-  '#0d9488', // Emerald Teal
-  '#d97706', // Warm Amber
-  '#6366f1', // Indigo
-  '#e11d48', // Coral Rose
-  '#8b5cf6', // Violet
-  '#16a34a', // Fresh Green
-  '#ea580c', // Bright Orange
-];
+// Curated palettes ensuring maximum visual distinction and zero hue collision
+export const CURATED_PALETTE_SETS: Record<PaletteMode, string[][]> = {
+  vibrant: [
+    ['#0284c7', '#d97706', '#0d9488', '#8b5cf6', '#e11d48', '#16a34a'],
+    ['#2563eb', '#ea580c', '#059669', '#7c3aed', '#db2777', '#ca8a04'],
+    ['#06b6d4', '#f59e0b', '#10b981', '#6366f1', '#f43f5e', '#84cc16'],
+    ['#0284c7', '#f97316', '#14b8a6', '#a855f7', '#e11d48', '#eab308'],
+  ],
+  pastel: [
+    ['#7dd3fc', '#fdba74', '#86efac', '#c084fc', '#f472b6', '#fde047'],
+    ['#67e8f9', '#fca5a5', '#a7f3d0', '#d8b4fe', '#f9a8d4', '#fef08a'],
+    ['#93c5fd', '#fed7aa', '#6ee7b7', '#e879f9', '#fb7185', '#fef9c3'],
+    ['#38bdf8', '#fb923c', '#4ade80', '#a78bfa', '#ec4899', '#facc15'],
+  ],
+  monochrome: [
+    ['#1e293b', '#64748b', '#cbd5e1', '#475569', '#94a3b8', '#e2e8f0'],
+    ['#18181b', '#71717a', '#d4d4d8', '#3f3f46', '#a1a1aa', '#e4e4e7'],
+    ['#111827', '#6b7280', '#d1d5db', '#374151', '#9ca3af', '#e5e7eb'],
+    ['#0f172a', '#475569', '#94a3b8', '#334155', '#cbd5e1', '#f1f5f9'],
+  ],
+};
+
+export const COLOR_PALETTES: Record<PaletteMode, string[]> = {
+  vibrant: CURATED_PALETTE_SETS.vibrant[0],
+  pastel: CURATED_PALETTE_SETS.pastel[0],
+  monochrome: CURATED_PALETTE_SETS.monochrome[0],
+};
+
+export const PALETTE = CURATED_PALETTE_SETS.vibrant[0];
 
 export function dedupeOrientations(list: Orientation[]): Orientation[] {
   const seen = new Set<string>();
@@ -235,7 +253,11 @@ export function computePacking(
   };
 }
 
-export function buildOrientationSummaries(placements: Placement[]): OrientationSummary[] {
+export function buildOrientationSummaries(
+  placements: Placement[],
+  paletteMode: PaletteMode = 'vibrant',
+  variationSeed: number = 0
+): OrientationSummary[] {
   const orientCounts: Record<string, { count: number; dx: number; dy: number; dz: number }> = {};
   for (const p of placements) {
     const key = `${p.dx.toFixed(3)}_${p.dy.toFixed(3)}_${p.dz.toFixed(3)}`;
@@ -245,6 +267,8 @@ export function buildOrientationSummaries(placements: Placement[]): OrientationS
     orientCounts[key].count++;
   }
 
+  const variations = CURATED_PALETTE_SETS[paletteMode] || CURATED_PALETTE_SETS.vibrant;
+  const activeSet = variations[variationSeed % variations.length];
   const total = placements.length;
   const keys = Object.keys(orientCounts);
   return keys.map((key, i) => {
@@ -255,7 +279,7 @@ export function buildOrientationSummaries(placements: Placement[]): OrientationS
       dx: item.dx,
       dy: item.dy,
       dz: item.dz,
-      color: PALETTE[i % PALETTE.length],
+      color: activeSet[i % activeSet.length],
       percentage: total > 0 ? (item.count / total) * 100 : 0,
     };
   });
